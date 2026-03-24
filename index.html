@@ -1,0 +1,738 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>谷芳茶業 - 智慧單據系統 Pro</title>
+    
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://unpkg.com https://cdnjs.cloudflare.com https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data: blob:;">
+
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700&display=swap" rel="stylesheet">
+
+    <style>
+        :root {
+            --bg-grad-1: #Fdfbfb;
+            --bg-grad-2: #ebedee;
+            --glass-bg: rgba(255, 255, 255, 0.7);
+            --glass-border: rgba(255, 255, 255, 0.4);
+            --glass-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.1);
+            --primary: #C48B57; /* 溫暖茶色 */
+            --primary-hover: #b07c4c;
+            --text-main: #333333;
+            --text-muted: #666666;
+            --danger: #e63946;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: 'Noto Sans TC', sans-serif;
+        }
+
+        body {
+            background: linear-gradient(135deg, var(--bg-grad-1) 0%, var(--bg-grad-2) 100%);
+            color: var(--text-main);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        /* Glassmorphism 共用類別 */
+        .glass-panel {
+            background: var(--glass-bg);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid var(--glass-border);
+            box-shadow: var(--glass-shadow);
+            border-radius: 16px;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+
+        h1, h2, h3 { color: var(--primary); margin-bottom: 15px; }
+
+        /* 表單元件 */
+        .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; }
+        .grid-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 15px; }
+        
+        @media (max-width: 768px) {
+            .grid-2, .grid-4 { grid-template-columns: 1fr; }
+            body { padding: 10px; }
+        }
+
+        .form-group { display: flex; flex-direction: column; margin-bottom: 15px; }
+        .form-group label { font-size: 0.9rem; margin-bottom: 5px; color: var(--text-muted); font-weight: 500;}
+        .form-group input, .form-group select, .form-group textarea {
+            padding: 10px;
+            border-radius: 8px;
+            border: 1px solid #ddd;
+            background: rgba(255,255,255,0.8);
+            outline: none;
+            transition: all 0.3s ease;
+        }
+        .form-group input:focus, .form-group select:focus, .form-group textarea:focus { border-color: var(--primary); box-shadow: 0 0 0 2px rgba(196, 139, 87, 0.2); }
+
+        /* 按鈕風格 */
+        .btn {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 500;
+            transition: all 0.3s ease;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+        .btn-primary { background: var(--primary); color: white; }
+        .btn-primary:hover { background: var(--primary-hover); }
+        .btn-danger { background: var(--danger); color: white; }
+        .btn-outline { background: transparent; border: 1px solid var(--primary); color: var(--primary); }
+        .btn-outline:hover { background: var(--primary); color: white; }
+        .btn-group { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 20px; }
+
+        /* 橫向滑動表格容器 */
+        .table-responsive {
+            overflow-x: auto;
+            border-radius: 8px;
+            border: 1px solid #ddd;
+        }
+        
+        .data-table {
+            width: 100%;
+            min-width: 800px;
+            border-collapse: collapse;
+        }
+        .data-table th, .data-table td {
+            padding: 10px;
+            text-align: left;
+            border-bottom: 1px solid #eee;
+        }
+        .data-table th { background: rgba(196, 139, 87, 0.1); color: var(--primary); font-weight: 500;}
+        .data-table input { width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; }
+
+        /* Modal 視窗 */
+        .modal-overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.5);
+            display: flex; align-items: center; justify-content: center;
+            z-index: 1000;
+        }
+        .modal-content {
+            background: var(--bg-grad-1);
+            padding: 30px;
+            border-radius: 16px;
+            width: 90vw;
+            max-width: 600px;
+            max-height: 90vh;
+            overflow-y: auto;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.2);
+        }
+        .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+        .close-btn { background: none; border: none; font-size: 1.5rem; cursor: pointer; }
+
+        /* ================= 列印與預覽區塊 (嚴格傳統樣式) ================= */
+        .preview-wrapper {
+            background: #e0e0e0;
+            padding: 20px;
+            border-radius: 12px;
+            overflow-x: auto;
+            margin-top: 20px;
+        }
+        
+        #print-area {
+            background: #fff;
+            color: #000;
+            width: 210mm;
+            min-height: 297mm;
+            padding: 15mm;
+            margin: 0 auto;
+            box-shadow: 0 0 10px rgba(0,0,0,0.1);
+            font-family: 'MingLiU', 'PMingLiU', 'Noto Sans TC', serif; /* 傳統單據常用字體 */
+            position: relative;
+        }
+
+        .print-header { text-align: center; margin-bottom: 15px; }
+        .print-title { font-size: 28px; font-weight: bold; letter-spacing: 2px; margin-bottom: 5px; }
+        .print-subtitle { font-size: 22px; letter-spacing: 15px; margin-left: 15px; } /* 補償 letter-spacing 造成的偏移 */
+        
+        .print-info-row { display: flex; justify-content: space-between; margin-bottom: 10px; font-size: 14px; }
+        
+        .print-table {
+            width: 100%;
+            border-collapse: collapse;
+            border: 2px solid #000;
+            margin-bottom: 10px;
+        }
+        .print-table th, .print-table td {
+            border: 1px solid #000;
+            padding: 6px 4px;
+            font-size: 14px;
+            text-align: center;
+            height: 32px; /* 固定行高 */
+        }
+        .print-table th { font-weight: normal; }
+        
+        /* 欄位寬度比例設定 */
+        .col-idx { width: 40px; }
+        .col-name { width: auto; text-align: left !important; padding-left: 10px !important;}
+        .col-qty { width: 80px; }
+        .col-price { width: 80px; text-align: right !important; padding-right: 5px !important;}
+        .col-subtotal { width: 100px; text-align: right !important; padding-right: 5px !important;}
+        .col-remark { width: 120px; }
+
+        .print-footer { margin-top: 15px; font-size: 14px; }
+        .chinese-total { margin-top: 5px; letter-spacing: 2px; }
+        
+        /* 底部免責與簽章區塊 */
+        .disclaimer-area {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 30px;
+            align-items: flex-end;
+        }
+        .disclaimer-text {
+            width: 50%;
+            font-size: 10px;
+            line-height: 1.4;
+            text-align: justify;
+            white-space: pre-wrap; /* 支援換行顯示 */
+        }
+        .signatures-wrapper {
+            width: 48%;
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-end;
+        }
+        .customer-signature {
+            position: relative;
+            padding-bottom: 10px;
+        }
+        .signature-area {
+            text-align: right;
+            position: relative;
+            padding-bottom: 10px;
+        }
+        
+        /* 印章圖片設定 */
+        .stamp-img {
+            position: absolute;
+            top: -40px;
+            right: 0px;
+            width: 120px;
+            height: auto;
+            mix-blend-mode: multiply;
+            opacity: 0.85;
+            pointer-events: none;
+        }
+
+        /* 列印模式隱藏所有非列印元素 */
+        @media print {
+            body { background: #fff; padding: 0; margin: 0; }
+            .no-print, .glass-panel, .preview-wrapper { display: none !important; }
+            #print-area {
+                width: 100%;
+                min-height: auto;
+                padding: 0;
+                margin: 0;
+                box-shadow: none;
+                page-break-after: always;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div id="app">
+        <div class="glass-panel no-print">
+            <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; margin-bottom: 20px;">
+                <h2>谷芳茶業 - 智慧單據系統 Pro</h2>
+                <div class="btn-group" style="margin-bottom: 0;">
+                    <button class="btn" @click="docType = '報價單'" :class="docType === '報價單' ? 'btn-primary' : 'btn-outline'">報價單</button>
+                    <button class="btn" @click="docType = '出貨單'" :class="docType === '出貨單' ? 'btn-primary' : 'btn-outline'">出貨單</button>
+                    <button class="btn" @click="showCompanyName = !showCompanyName" :class="showCompanyName ? 'btn-primary' : 'btn-outline'">
+                        {{ showCompanyName ? '🏢 顯示公司抬頭' : '🏢 隱藏公司抬頭' }}
+                    </button>
+                    <button class="btn btn-outline" @click="openSettings">⚙️ 系統設定</button>
+                </div>
+            </div>
+
+            <div class="grid-4">
+                <div class="form-group">
+                    <label>單據日期</label>
+                    <input type="date" v-model="docDate">
+                </div>
+                <div class="form-group">
+                    <label>訂購公司名稱 (買方)</label>
+                    <input type="text" v-model="buyer.name" placeholder="請輸入公司名稱">
+                </div>
+                <div class="form-group">
+                    <label>買方電話</label>
+                    <input type="text" v-model="buyer.phone" placeholder="請輸入電話">
+                </div>
+                <div class="form-group">
+                    <label>買方地址</label>
+                    <input type="text" v-model="buyer.address" placeholder="請輸入地址">
+                </div>
+            </div>
+
+            <div class="grid-4">
+                <div class="form-group">
+                    <label>運費</label>
+                    <input type="number" v-model="freight" placeholder="0">
+                </div>
+                <div class="form-group">
+                    <label>稅金</label>
+                    <input type="number" v-model="tax" placeholder="0">
+                </div>
+                <div class="form-group">
+                    <label>經辦人</label>
+                    <input type="text" v-model="manager" placeholder="請輸入經辦人姓名">
+                </div>
+                <div class="form-group">
+                    <label>賣方公司章 (500KB內)</label>
+                    <div style="display:flex; gap: 5px;">
+                        <input type="file" @change="uploadStamp" accept="image/*" style="flex:1; padding: 5px;">
+                        <button v-if="sellerStamp" class="btn btn-danger" @click="sellerStamp = null" style="padding: 5px 10px;">清除</button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="form-group" style="margin-bottom: 0;">
+                <label>單據底部備註 / 免責聲明</label>
+                <textarea v-model="disclaimerText" rows="2" placeholder="請輸入印在單據左下方的備註或免責聲明..."></textarea>
+            </div>
+        </div>
+
+        <div class="glass-panel no-print">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                <h3>品項明細</h3>
+                <div class="btn-group" style="margin-bottom: 0;">
+                    <button class="btn btn-primary" @click="addItem">＋ 新增一列</button>
+                    <button class="btn btn-danger" @click="clearItems">🗑️ 清空表格</button>
+                </div>
+            </div>
+
+            <div class="table-responsive">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th width="50">項次</th>
+                            <th width="300">品名</th>
+                            <th width="100">數量</th>
+                            <th width="100">單位</th>
+                            <th width="120">單價</th>
+                            <th width="120">小計</th>
+                            <th width="150">備註</th>
+                            <th width="80">操作</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr v-for="(item, index) in items" :key="index">
+                            <td>{{ index + 1 }}</td>
+                            <td>
+                                <input type="text" v-model="item.name" list="productList" placeholder="輸入或選擇品名">
+                                <datalist id="productList">
+                                    <option v-for="prod in settings.products" :value="prod">{{ prod }}</option>
+                                </datalist>
+                            </td>
+                            <td><input type="number" v-model="item.qty" min="1" @input="calcSubtotal(item)"></td>
+                            <td><input type="text" v-model="item.unit" placeholder="如: 包"></td>
+                            <td><input type="number" v-model="item.price" min="0" @input="calcSubtotal(item)"></td>
+                            <td>{{ item.subtotal || 0 }}</td>
+                            <td><input type="text" v-model="item.remark"></td>
+                            <td><button class="btn btn-danger" style="padding: 5px 10px;" @click="removeItem(index)">X</button></td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <div style="display: flex; justify-content: space-between; margin-top: 20px; align-items: center;">
+                <h3 style="margin:0;">總計金額：{{ finalTotal }} 元</h3>
+                <div class="btn-group" style="margin:0;">
+                    <button class="btn btn-outline" @click="exportExcel">📊 匯出 Excel</button>
+                    <button class="btn btn-outline" @click="downloadPDF">📄 下載 PDF</button>
+                    <button class="btn btn-primary" @click="printReceipt">🖨️ 列印單據</button>
+                </div>
+            </div>
+        </div>
+
+        <div v-if="showSettings" class="modal-overlay no-print">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h2>系統設定</h2>
+                    <button class="close-btn" @click="showSettings = false">×</button>
+                </div>
+                
+                <div class="form-group">
+                    <label>自訂品項清單 (以逗號分隔，供下拉選擇)</label>
+                    <textarea v-model="tempProducts" rows="5"></textarea>
+                </div>
+
+                <div class="btn-group" style="margin-top: 20px;">
+                    <button class="btn btn-primary" @click="saveSettings">儲存設定</button>
+                    <button class="btn btn-outline" @click="exportConfig">匯出設定檔 (JSON)</button>
+                    <input type="file" id="importConfig" style="display:none" @change="importConfig" accept=".json">
+                    <button class="btn btn-outline" onclick="document.getElementById('importConfig').click()">匯入設定檔</button>
+                </div>
+            </div>
+        </div>
+
+        <h3 class="no-print" style="margin-top: 30px;">📄 A4 列印預覽</h3>
+        <div class="preview-wrapper no-print">
+            <div id="print-area">
+                <div class="print-header">
+                    <div class="print-title" :style="{ visibility: showCompanyName ? 'visible' : 'hidden' }">谷芳茶業有限公司</div>
+                    <div class="print-subtitle">{{ docType.split('').join('    ') }}</div>
+                </div>
+
+                <div class="print-info-row">
+                    <div>訂購公司名稱： {{ buyer.name }} &nbsp;&nbsp;&nbsp;&nbsp;電話： {{ buyer.phone }} &nbsp;&nbsp;地址： {{ buyer.address }}</div>
+                    <div>日期： &nbsp;&nbsp;{{ rocYear }} &nbsp;&nbsp;年 &nbsp;&nbsp;{{ rocMonth }} &nbsp;&nbsp;月 &nbsp;&nbsp;{{ rocDay }} &nbsp;&nbsp;日</div>
+                </div>
+
+                <table class="print-table">
+                    <thead>
+                        <tr>
+                            <th class="col-idx"></th>
+                            <th class="col-name">品 &nbsp; &nbsp; &nbsp; 名</th>
+                            <th class="col-qty">數 &nbsp; 量</th>
+                            <th class="col-price">單 &nbsp; 價</th>
+                            <th class="col-subtotal">金 &nbsp; 額</th>
+                            <th class="col-remark">備 &nbsp; 註</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr v-for="(row, idx) in printRows" :key="idx">
+                            <td>{{ idx + 1 }}</td>
+                            <td class="col-name">{{ row.name || '' }}</td>
+                            <td>{{ formatQty(row) }}</td>
+                            <td class="col-price">{{ row.price ? row.price : '' }}</td>
+                            <td class="col-subtotal">{{ row.subtotal ? row.subtotal : '' }}</td>
+                            <td>{{ row.remark || '' }}</td>
+                        </tr>
+                        <tr>
+                            <td colspan="4" style="text-align: right; font-weight: bold; padding-right: 15px; letter-spacing: 5px;">總計</td>
+                            <td class="col-subtotal" style="font-weight: bold;">{{ finalTotal }}</td>
+                            <td></td>
+                        </tr>
+                    </tbody>
+                </table>
+
+                <div class="print-footer">
+                    <div class="chinese-total">
+                        &nbsp;&nbsp;&nbsp;&nbsp;合計&nbsp;&nbsp;新台幣&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;{{ chn(totalArr[0]) }}&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;萬&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;{{ chn(totalArr[1]) }}&nbsp;&nbsp;&nbsp;&nbsp;仟&nbsp;&nbsp;&nbsp;{{ chn(totalArr[2]) }}&nbsp;&nbsp;佰&nbsp;&nbsp;{{ chn(totalArr[3]) }}&nbsp;&nbsp;&nbsp;拾&nbsp;&nbsp;{{ chn(totalArr[4]) }}&nbsp;&nbsp;&nbsp;元整
+                    </div>
+                    
+                    <div class="disclaimer-area">
+                        <div class="disclaimer-text">{{ disclaimerText }}</div>
+                        <div class="signatures-wrapper">
+                            <div class="customer-signature">
+                                {{ docType === '報價單' ? '客戶簽收' : '客戶回簽' }}：___________
+                            </div>
+                            <div class="signature-area">
+                                經辦人：{{ manager || '___________' }}
+                                <img v-if="sellerStamp" :src="sellerStamp" class="stamp-img" alt="公司章">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const { createApp, ref, computed, watch, onMounted } = Vue;
+
+        createApp({
+            setup() {
+                // 基本資料
+                const docType = ref('出貨單');
+                const docDate = ref(new Date().toISOString().split('T')[0]);
+                const buyer = ref({ name: '', phone: '', address: '' });
+                const manager = ref('李璟旻');
+                const showCompanyName = ref(true); // 新增：是否顯示公司名稱
+                
+                // 費用相關
+                const items = ref([{ name: '', qty: 1, unit: '', price: 0, subtotal: 0, remark: '' }]);
+                const freight = ref(0);
+                const tax = ref(0);
+                
+                // 印章、設定與備註
+                const sellerStamp = ref(null);
+                const showSettings = ref(false);
+                const disclaimerText = ref('本交易在貨款未付清或票據未兌現償付之前，貨物的所有權仍歸屬本單位所有，接受人絕無異議，本單位無須經法律程序隨時取回絕無異議，本單位無須經法律程序隨時取回本貨物或代替物清償。');
+                
+                const settings = ref({
+                    products: ['鐵觀音茶75g', '碧螺春茶包', '蜜香紅茶', '東方美人茶']
+                });
+                const tempProducts = ref('');
+
+                // 民國日期計算
+                const rocYear = computed(() => {
+                    const date = new Date(docDate.value);
+                    return date.getFullYear() - 1911;
+                });
+                const rocMonth = computed(() => {
+                    const date = new Date(docDate.value);
+                    return String(date.getMonth() + 1).padStart(2, '0');
+                });
+                const rocDay = computed(() => {
+                    const date = new Date(docDate.value);
+                    return String(date.getDate()).padStart(2, '0');
+                });
+
+                // 計算列印的 18 行資料
+                const printRows = computed(() => {
+                    let rows = [];
+                    // 1. 加入有填寫的品項
+                    items.value.forEach(item => {
+                        if (item.name || item.qty > 0 || item.price > 0) {
+                            rows.push({ ...item });
+                        }
+                    });
+                    
+                    // 2. 加入運費 (若有)
+                    if (Number(freight.value) > 0) {
+                        rows.push({ name: '運費', qty: 1, unit: '件', price: freight.value, subtotal: freight.value, remark: '' });
+                    }
+                    
+                    // 3. 加入稅金 (若有)
+                    if (Number(tax.value) > 0) {
+                        rows.push({ name: '稅金', qty: '', unit: '', price: '', subtotal: tax.value, remark: '' });
+                    }
+
+                    // 4. 補齊至 18 行
+                    while (rows.length < 18) {
+                        rows.push({ name: '', qty: '', unit: '', price: '', subtotal: '', remark: '' });
+                    }
+                    
+                    // 強制截斷至 18 行 (防止超過實體版面)
+                    return rows.slice(0, 18);
+                });
+
+                const finalTotal = computed(() => {
+                    let sum = items.value.reduce((acc, curr) => acc + Number(curr.subtotal || 0), 0);
+                    sum += Number(freight.value || 0);
+                    sum += Number(tax.value || 0);
+                    return sum;
+                });
+
+                // 中文大寫金額處理 (萬 仟 佰 拾 元)
+                const totalArr = computed(() => {
+                    // 將數字轉字串，最多取後五位，前面補空格
+                    let str = String(Math.floor(finalTotal.value)).padStart(5, ' ');
+                    return str.split('');
+                });
+
+                const chn = (char) => {
+                    if (char === ' ' || char === undefined) return '　'; // 全形空白對齊
+                    const map = { '0':'零', '1':'壹', '2':'貳', '3':'參', '4':'肆', '5':'伍', '6':'陸', '7':'柒', '8':'捌', '9':'玖' };
+                    return map[char] || '　';
+                };
+
+                const formatQty = (row) => {
+                    if (!row.qty && row.qty !== 0) return '';
+                    return `${row.qty}${row.unit || ''}`;
+                };
+
+                // 操作方法
+                const calcSubtotal = (item) => {
+                    item.subtotal = Number(item.qty || 0) * Number(item.price || 0);
+                };
+
+                const addItem = () => {
+                    items.value.push({ name: '', qty: 1, unit: '', price: 0, subtotal: 0, remark: '' });
+                };
+
+                const removeItem = (index) => {
+                    items.value.splice(index, 1);
+                    if (items.value.length === 0) addItem();
+                };
+
+                const clearItems = () => {
+                    items.value = [{ name: '', qty: 1, unit: '', price: 0, subtotal: 0, remark: '' }];
+                    freight.value = 0;
+                    tax.value = 0;
+                };
+
+                const uploadStamp = (e) => {
+                    const file = e.target.files[0];
+                    if (!file) return;
+                    if (file.size > 500 * 1024) {
+                        alert('圖片大小不能超過 500KB，請重新選擇。');
+                        e.target.value = '';
+                        return;
+                    }
+                    const reader = new FileReader();
+                    reader.onload = (event) => {
+                        sellerStamp.value = event.target.result;
+                    };
+                    reader.readAsDataURL(file);
+                };
+
+                // 設定檔管理
+                const openSettings = () => {
+                    tempProducts.value = settings.value.products.join(', ');
+                    showSettings.value = true;
+                };
+
+                const saveSettings = () => {
+                    settings.value.products = tempProducts.value.split(',').map(s => s.trim()).filter(s => s);
+                    showSettings.value = false;
+                    alert('設定已儲存！');
+                };
+
+                const exportConfig = () => {
+                    const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(settings.value));
+                    const downloadAnchorNode = document.createElement('a');
+                    downloadAnchorNode.setAttribute("href", dataStr);
+                    downloadAnchorNode.setAttribute("download", "gufang_settings.json");
+                    document.body.appendChild(downloadAnchorNode);
+                    downloadAnchorNode.click();
+                    downloadAnchorNode.remove();
+                };
+
+                const importConfig = (e) => {
+                    const file = e.target.files[0];
+                    if (!file) return;
+                    const reader = new FileReader();
+                    reader.onload = (event) => {
+                        try {
+                            const imported = JSON.parse(event.target.result);
+                            if (imported.products) {
+                                settings.value = imported;
+                                alert('設定匯入成功！');
+                                showSettings.value = false;
+                            } else {
+                                alert('無效的設定檔格式。');
+                            }
+                        } catch (err) {
+                            alert('讀取設定檔失敗。');
+                        }
+                    };
+                    reader.readAsText(file);
+                };
+
+                // 匯出與列印功能
+                const printReceipt = () => {
+                    window.print();
+                };
+
+                const downloadPDF = () => {
+                    const element = document.getElementById('print-area');
+                    const opt = {
+                        margin:       0,
+                        filename:     `谷芳茶業_${docType.value}_${rocYear.value}${rocMonth.value}${rocDay.value}.pdf`,
+                        image:        { type: 'jpeg', quality: 0.98 },
+                        html2canvas:  { scale: 2, useCORS: true },
+                        jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' }
+                    };
+                    html2pdf().set(opt).from(element).save();
+                };
+
+                const exportExcel = () => {
+                    // 根據傳統樣式建構 Excel 資料
+                    const wsData = [];
+                    // 根據 showCompanyName 決定是否在 Excel 寫入公司名稱
+                    wsData.push([showCompanyName.value ? "谷芳茶業有限公司" : "", "", "", "", "", ""]);
+                    wsData.push([docType.value.split('').join('  '), "", "", "", "", ""]);
+                    wsData.push([`日期： ${rocYear.value} 年 ${rocMonth.value} 月 ${rocDay.value} 日`, "", "", "", "", ""]);
+                    wsData.push([`訂購公司名稱： ${buyer.value.name}   電話： ${buyer.value.phone}  地址： ${buyer.value.address}`, "", "", "", "", ""]);
+                    wsData.push(["", "品名", "數量", "單價", "金額", "備註"]);
+                    
+                    printRows.value.forEach((row, index) => {
+                        wsData.push([
+                            index + 1,
+                            row.name || '',
+                            formatQty(row),
+                            row.price || '',
+                            row.subtotal || '',
+                            row.remark || ''
+                        ]);
+                    });
+                    
+                    wsData.push(["", "", "", "總計", finalTotal.value, ""]);
+                    
+                    const wb = XLSX.utils.book_new();
+                    const ws = XLSX.utils.aoa_to_sheet(wsData);
+                    XLSX.utils.book_append_sheet(wb, ws, "單據明細");
+                    XLSX.writeFile(wb, `谷芳茶業_${docType.value}_${rocYear.value}${rocMonth.value}${rocDay.value}.xlsx`);
+                };
+
+                // 資料持久化 (LocalStorage)
+                const STORAGE_KEY = 'gufang_pro_data';
+                
+                const saveData = () => {
+                    const data = {
+                        docType: docType.value,
+                        docDate: docDate.value,
+                        buyer: buyer.value,
+                        manager: manager.value,
+                        items: items.value,
+                        freight: freight.value,
+                        tax: tax.value,
+                        sellerStamp: sellerStamp.value,
+                        disclaimerText: disclaimerText.value,
+                        settings: settings.value,
+                        showCompanyName: showCompanyName.value // 儲存公司抬頭顯示狀態
+                    };
+                    localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+                };
+
+                const loadData = () => {
+                    const stored = localStorage.getItem(STORAGE_KEY);
+                    if (stored) {
+                        try {
+                            const data = JSON.parse(stored);
+                            if (data.docType) docType.value = data.docType;
+                            if (data.docDate) docDate.value = data.docDate;
+                            if (data.buyer) buyer.value = data.buyer;
+                            if (data.manager) manager.value = data.manager;
+                            if (data.items && data.items.length) items.value = data.items;
+                            if (data.freight !== undefined) freight.value = data.freight;
+                            if (data.tax !== undefined) tax.value = data.tax;
+                            if (data.sellerStamp) sellerStamp.value = data.sellerStamp;
+                            if (data.disclaimerText !== undefined) disclaimerText.value = data.disclaimerText;
+                            if (data.settings) settings.value = data.settings;
+                            if (data.showCompanyName !== undefined) showCompanyName.value = data.showCompanyName;
+                        } catch (e) {
+                            console.error('LocalStorage parsing error', e);
+                        }
+                    }
+                };
+
+                // 監聽所有變化並自動存檔 (毫秒級)
+                watch([docType, docDate, buyer, manager, items, freight, tax, sellerStamp, disclaimerText, settings, showCompanyName], () => {
+                    saveData();
+                }, { deep: true });
+
+                // 支援跨分頁同步
+                onMounted(() => {
+                    loadData();
+                    window.addEventListener('storage', (e) => {
+                        if (e.key === STORAGE_KEY) {
+                            loadData();
+                        }
+                    });
+                    
+                    // 初始化 Modal 設定值
+                    tempProducts.value = settings.value.products.join(', ');
+                });
+
+                return {
+                    docType, docDate, buyer, manager, items, freight, tax,
+                    sellerStamp, showSettings, settings, tempProducts, disclaimerText,
+                    showCompanyName, rocYear, rocMonth, rocDay, printRows, finalTotal, totalArr,
+                    chn, formatQty, calcSubtotal, addItem, removeItem, clearItems,
+                    uploadStamp, openSettings, saveSettings, exportConfig, importConfig,
+                    printReceipt, downloadPDF, exportExcel
+                };
+            }
+        }).mount('#app');
+    </script>
+</body>
+</html>
