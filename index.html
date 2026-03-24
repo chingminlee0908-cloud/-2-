@@ -186,7 +186,7 @@
         .col-remark { width: 120px; }
 
         .print-footer { margin-top: 15px; font-size: 14px; }
-        .chinese-total { margin-top: 5px; letter-spacing: 2px; }
+        .chinese-total { margin-top: 5px; letter-spacing: 3px; font-weight: bold; }
         
         /* 底部免責與簽章區塊 */
         .disclaimer-area {
@@ -424,7 +424,7 @@
 
                 <div class="print-footer">
                     <div class="chinese-total">
-                        &nbsp;&nbsp;&nbsp;&nbsp;合計&nbsp;&nbsp;新台幣&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;{{ chn(totalArr[0]) }}&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;萬&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;{{ chn(totalArr[1]) }}&nbsp;&nbsp;&nbsp;&nbsp;仟&nbsp;&nbsp;&nbsp;{{ chn(totalArr[2]) }}&nbsp;&nbsp;佰&nbsp;&nbsp;{{ chn(totalArr[3]) }}&nbsp;&nbsp;&nbsp;拾&nbsp;&nbsp;{{ chn(totalArr[4]) }}&nbsp;&nbsp;&nbsp;元整
+                        &nbsp;&nbsp;&nbsp;&nbsp;合計&nbsp;&nbsp;新台幣&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;{{ chineseTotalString }}
                     </div>
                     
                     <div class="disclaimer-area">
@@ -521,18 +521,38 @@
                     return sum;
                 });
 
-                // 中文大寫金額處理 (萬 仟 佰 拾 元)
-                const totalArr = computed(() => {
-                    // 將數字轉字串，最多取後五位，前面補空格
-                    let str = String(Math.floor(finalTotal.value)).padStart(5, ' ');
-                    return str.split('');
+                // 智慧中文大寫轉換：能正確處理任意位數 (如10萬以上、中間有零等情況)
+                const chineseTotalString = computed(() => {
+                    let num = Math.floor(finalTotal.value);
+                    if (num === 0) return '零元整';
+                    
+                    const digits = ['零', '壹', '貳', '參', '肆', '伍', '陸', '柒', '捌', '玖'];
+                    const units = ['', '拾', '佰', '仟', '萬', '拾', '佰', '仟', '億', '拾', '佰', '仟'];
+                    let numStr = String(num);
+                    let result = '';
+                    let zeroCount = 0;
+                    
+                    for (let i = 0; i < numStr.length; i++) {
+                        let n = Number(numStr[i]);
+                        let u = numStr.length - 1 - i;
+                        
+                        if (n === 0) {
+                            zeroCount++;
+                            // 遇到萬、億等大單位時，若前面有數字仍需補上單位
+                            if (u === 4 || u === 8) {
+                                if (zeroCount < 4) result += units[u];
+                                zeroCount = 0;
+                            }
+                        } else {
+                            if (zeroCount > 0) {
+                                result += '零';
+                                zeroCount = 0;
+                            }
+                            result += digits[n] + units[u];
+                        }
+                    }
+                    return result + '元整';
                 });
-
-                const chn = (char) => {
-                    if (char === ' ' || char === undefined) return '　'; // 全形空白對齊
-                    const map = { '0':'零', '1':'壹', '2':'貳', '3':'參', '4':'肆', '5':'伍', '6':'陸', '7':'柒', '8':'捌', '9':'玖' };
-                    return map[char] || '　';
-                };
 
                 const formatQty = (row) => {
                     if (!row.qty && row.qty !== 0) return '';
@@ -655,7 +675,9 @@
                         ]);
                     });
                     
+                    // 這裡匯出到 Excel 也改用新的動態字串
                     wsData.push(["", "", "", "總計", finalTotal.value, ""]);
+                    wsData.push([`合計 新台幣 ${chineseTotalString.value}`, "", "", "", "", ""]);
                     
                     const wb = XLSX.utils.book_new();
                     const ws = XLSX.utils.aoa_to_sheet(wsData);
@@ -726,8 +748,8 @@
                 return {
                     docType, docDate, buyer, manager, items, freight, tax,
                     sellerStamp, showSettings, settings, tempProducts, disclaimerText,
-                    showCompanyName, rocYear, rocMonth, rocDay, printRows, finalTotal, totalArr,
-                    chn, formatQty, calcSubtotal, addItem, removeItem, clearItems,
+                    showCompanyName, rocYear, rocMonth, rocDay, printRows, finalTotal, 
+                    chineseTotalString, formatQty, calcSubtotal, addItem, removeItem, clearItems,
                     uploadStamp, openSettings, saveSettings, exportConfig, importConfig,
                     printReceipt, downloadPDF, exportExcel
                 };
